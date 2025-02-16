@@ -1,6 +1,8 @@
 const departmentSchema = {
-    "depId" : "",
-    "depName" : "",
-    "createdOn" : ""
+    "departmentId" : Number,
+    "departmentUUID" : '',
+    "departmentName" : '',
+    "companyId" : Number,
+    "createdOn" : ''
 }
 module.exports = departmentSchema
