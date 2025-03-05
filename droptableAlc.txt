@@ -1,0 +1,8 @@
+DROP TABLE IF EXISTS equipment_log;
+DROP TABLE IF EXISTS users_equipment;
+DROP TABLE IF EXISTS users_department;
+DROP TABLE IF EXISTS users_company;
+DROP TABLE IF EXISTS equipment;
+DROP TABLE IF EXISTS users;
+DROP TABLE IF EXISTS department;
+DROP TABLE IF EXISTS company;
