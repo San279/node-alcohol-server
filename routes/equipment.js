@@ -229,8 +229,9 @@ router.get("/getAll", verifyToken, async (req, res) => {
         values:[]
     }
     if (req.user.priv == 'admin'){
-        query.text = `SELECT c.companyName, d.departmentName, e.equipmentUUID,
-        e.equipmentModel, e.createon
+        query.text = `SELECT c.companyName, c.companyUUID, 
+        d.departmentName, d.departmentUUID,
+        e.equipmentUUID, e.equipmentModel, e.createon
         FROM equipment e
         JOIN company c ON e.companyId = c.companyId
         JOIN department d ON e.departmentId = d.departmentId
@@ -238,13 +239,16 @@ router.get("/getAll", verifyToken, async (req, res) => {
         WHERE uc.userId = $1`;
         query.values = [req.user.userId]
     }else if (req.user.priv == "super"){
-        query.text =  `SELECT c.companyName, d.departmentName, e.* 
+        query.text =  `SELECT c.companyName, c.companyUUID, 
+        d.departmentName, d.departmentuuid, 
+        e.* 
         FROM equipment e
         JOIN company c ON e.companyId = c.companyId
         JOIN department d ON e.departmentId = d.departmentId`;
     }else{
-        query.text =  `SELECT c.companyName, d.departmentName, e.equipmentUUID,
-        e.equipmentModel, e.createon
+        query.text =  `SELECT c.companyName, c.companyUUID, 
+        d.departmentName, d.departmentUUID,
+        e.equipmentUUID, e.equipmentModel, e.createon
         FROM equipment e
         JOIN company c ON e.companyId = c.companyId
         JOIN department d ON e.departmentId = d.departmentId

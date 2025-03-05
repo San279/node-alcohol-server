@@ -78,8 +78,13 @@ router.post("/login", async (req, res) => {
                     process.env.JWT_SECRET,
                     {expiresIn: "20d"}
                 );
+                const user = {
+                    userName:queryRes.rows[0].username,
+                    name: queryRes.rows[0].name, 
+                    priv: queryRes.rows[0].priv,
+                }
                 console.log(accessToken);
-                res.status(200).json({accessToken});
+                res.status(200).json({accessToken, user});
             } else {
                 res.status(401).json({ error: "Wrong Username or/and Password" });
             }
@@ -267,7 +272,6 @@ router.post("/addUserEquip", async (req, res) => {
 })
 
 router.get("/getAll", verifyToken, async (req, res) => {
-    console.log(req.user);
     let query = {
         text:``,
         values:[]
@@ -284,7 +288,6 @@ router.get("/getAll", verifyToken, async (req, res) => {
         FROM users WHERE userId = $1`
         query.values = [req.user.userId]
     }
-    console.log(query);
     db.connect((err, client) => {
         if (err) {
             console.log(err)
