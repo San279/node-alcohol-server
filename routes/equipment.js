@@ -2,41 +2,45 @@ const { Router } = require("express");
 const router = Router();
 const equipment = require("../models/equipment");
 const db = require('../connect_postgres');
+const verifyToken = require("../routes/auth");
 const utils = require('./uti')
 
-router.post("/create/:depId", utils.requireParams(["depId"]), async (req, res) => {
+router.post("/create", async (req, res) => {
     if (req.body.constructor === Object && Object.keys(req.body).length === 0) {
         console.log('Object missing');
         res.status(500).json("No json body found");
     }
-    const depId = req.params.depId;
-    const {equipmentModel} = req.body;
+    const { companyUUID, departmentUUID, equipmentModel } = req.body;
     console.log(req.params);
     const query = {
         text: `
           WITH dep_info AS (
-            SELECT departmentId, companyId
+            SELECT departmentId
             FROM department
-            WHERE departmentUUID = $2::uuid
+            WHERE departmentUUID = ANY($2::uuid[])
+          ),
+          comp_info AS (
+            SELECT companyId
+            FROM company
+            WHERE companyUUID = ANY($3::uuid[])
           )
           INSERT INTO equipment (equipmentModel, companyId, departmentId)
           SELECT $1, companyId, departmentId
-          FROM dep_info
+          FROM dep_info, comp_info
         `,
-        values: [equipmentModel, depId]
+        values: [equipmentModel, departmentUUID, companyUUID]
     };
     db.connect((err, client) => {  // Get client via callback
         if (err) {
             console.log(err)
-            res.status(501).json({ error: err.message })
-            return
+            return res.status(501).json({ error: err.message })
+            
         }
         client.query(query.text, query.values, (err, queryRes) => {
             if (err) {
                 console.error(err);
-                res.status(401).json({ error: err.message })
                 client.release();
-                return
+                return res.status(401).json({ error: err.message })
             }
             res.status(200).json({ message: `${queryRes.rowCount} Equipment created` });
             client.release();
@@ -45,26 +49,77 @@ router.post("/create/:depId", utils.requireParams(["depId"]), async (req, res) =
 })
 
 
-router.get("/getById/:id", utils.requireParams(["id"]), async (req, res) => {
-    const id = req.params.id;
-    const selectStmt = "SELECT * FROM equipment WHERE equipmentUUID = $1";
+router.post("/getById", async (req, res) => {
+    let query = {
+        text: ``,
+        values: []
+    }
+    try {
+        const { equipmentUUID } = req.body;
+        query.text = `SELECT e.equipmentUUID, e.equipmentModel, 
+            c.companyName, c.companyUUID, d.departmentUUID, d.departmentName
+            FROM equipment e
+            JOIN company c ON e.companyId = c.companyId
+            JOIN department d ON e.departmentId = d.departmentId
+            WHERE equipmentUUID = ANY($1::uuid[])`;
+        query.values.push(...Array(equipmentUUID.length).fill(equipmentUUID));
+    } catch (err) {
+        console.log(err);
+        return res.status(401).json({ error: err })
+    }
     db.connect((err, client) => {  // Get client via callback
         if (err) {
             console.log(err)
-            res.status(501).json({ error: err.message })
-            return
+            return res.status(501).json({ error: err.message })
         }
-        client.query(selectStmt, [id], (err, queryRes) => {
+        client.query(query.text, query.values, (err, queryRes) => {
             if (err) {
                 console.error(err);
-                res.status(401).json({ error: err.message })
                 client.release();
-                return
+                return res.status(401).json({ error: err.message })
             }
             if (queryRes.rows.length) {
                 res.status(200).json(queryRes.rows);
             } else {
-                res.status(401).json({ error: "No company found" });
+                res.status(401).json({ error: "No Deparmtment found" });
+            }
+            client.release();
+        });
+    });
+})
+
+router.post("/getByDepId", async (req, res) => {
+    let query = {
+        text: ``,
+        values: []
+    }
+    try {
+        const { departmentUUID } = req.body;
+        query.text = `
+            SELECT e.*
+            FROM department d
+            JOIN equipment e ON d.departmentId = e.departmentId
+            WHERE d.departmentUUID = ANY($1::uuid[]);`
+        query.values = [departmentUUID]
+    } catch (err) {
+        return res.status(401).json({ error: err });
+    }
+
+    db.connect((err, client) => {  // Get client via callback
+        if (err) {
+            console.log(err)
+            return res.status(501).json({ error: err.message })
+        }
+        client.query(query.text, query.values, (err, queryRes) => {
+            if (err) {
+                console.error(err);
+                client.release();
+                return res.status(401).json({ error: err.message })
+            }
+            if (queryRes.rows.length) {
+                res.status(200).json(queryRes.rows);
+            } else {
+                res.status(204).json({ error: "No Equipment found" });
             }
             client.release();
         });
@@ -73,40 +128,7 @@ router.get("/getById/:id", utils.requireParams(["id"]), async (req, res) => {
 
 
 
-router.get("/getByDep/:depId", utils.requireParams(["depId"]), async (req, res) => {
-    const id = req.params.depId;
-    const query = `
-    SELECT e.*
-    FROM department d
-    JOIN equipment e ON d.departmentId = e.departmentId
-    WHERE d.departmentUUID = $1::uuid;
-    `;
-    db.connect((err, client) => {  // Get client via callback
-        if (err) {
-            console.log(err)
-            res.status(501).json({ error: err.message })
-            return
-        }
-        client.query(query, [id], (err, queryRes) => {
-            if (err) {
-                console.error(err);
-                res.status(401).json({ error: err.message })
-                client.release();
-                return
-            }
-            if (queryRes.rows.length) {
-                res.status(200).json(queryRes.rows);
-            } else {
-                res.status(401).json({ error: "No department found" });
-            }
-            client.release();
-        });
-    });
-})
-
-
-
-router.get("/getByCompanyId/:compId", utils.requireParams(["compId"]), async (req, res) => {
+router.get("/getByCompany/:compId", utils.requireParams(["compId"]), async (req, res) => {
     const id = req.params.compId;
     const query = `
     SELECT e.*
@@ -117,15 +139,13 @@ router.get("/getByCompanyId/:compId", utils.requireParams(["compId"]), async (re
     db.connect((err, client) => {  // Get client via callback
         if (err) {
             console.log(err)
-            res.status(501).json({ error: err.message })
-            return
+            return res.status(501).json({ error: err.message })
         }
         client.query(query, [id], (err, queryRes) => {
             if (err) {
                 console.error(err);
-                res.status(401).json({ error: err.message })
                 client.release();
-                return
+                return res.status(401).json({ error: err.message })
             }
             if (queryRes.rows.length) {
                 res.status(200).json(queryRes.rows);
@@ -136,63 +156,113 @@ router.get("/getByCompanyId/:compId", utils.requireParams(["compId"]), async (re
         });
     });
 })
-
-
-
-
-/*
-router.post("/sendData", async (req, res) => {
-    //console.log(req.params.new)
-    if (req.body.constructor === Object && Object.keys(req.body).length === 0) {
-        console.log('Object missing');
-        res.status(500).json(err);
-    }
-    let stringify = JSON.stringify(req.body);
-    let userReq = JSON.parse(stringify);
-    let curTime = utils.getCurDate();
-    let randGid = utils.getRandomGid();
-
-    userReq.logId = randGid;
-    userReq.gID = randGid;
-    userReq.checkDate = curTime;
-    userReq.createdOn = curTime;
-
-    let colStmt = utils.genStmtCol(userReq);
-    let placeStmt = utils.genStmtPlaceHolder(userReq)
-    let valArr = utils.genStmtArr(userReq);
-
-    console.log(colStmt);
-    console.log(placeStmt);
-    console.log(valArr);
-
-    insertStmt = "INSERT INTO equipment_logs(" + colStmt + ") VALUES(" + placeStmt + ")";
-    console.log(insertStmt);
-    db.run(insertStmt, valArr, (err) => {
-        if (err) {
-            console.log(err)
-            res.status(501).json(err)
-        }
-        console.log("insert successfully")
-        res.status(200).json(userReq);  //to send
-    })
-    //db.run()
-});
-*/
-
-router.get("/getAll", async (req, res) => {
-    const selectStmt = "SELECT * FROM equipment"
+router.post("/getLogByUser/:id", utils.requireParams(['id']), async (req, res) => {
+    const id = req.params.id;
+    const query = `
+    SELECT el.*
+    FROM users u
+    JOIN users_equipment ue ON u.userId = ue.userId
+    JOIN equipment_log el ON ue.equipmentModel = el.equipmentModel
+    WHERE u.userUUID = $1::uuid;
+    `;
     db.connect((err, client) => {  // Get client via callback
         if (err) {
             console.log(err)
-            res.status(501).json({ error: err.message })
-            return
+            return res.status(501).json({ error: err.message })
         }
-        client.query(selectStmt, (err, queryRes) => {
+        client.query(query, [id], (err, queryRes) => {
             if (err) {
                 console.error(err);
-                res.status(401).json({ error: err.message })
                 client.release();
-                return
+                return res.status(401).json({ error: err.message })
+            }
+            if (queryRes.rows.length) {
+                res.status(200).json(queryRes.rows);
+            } else {
+                res.status(401).json({ error: "No equipment log found" });
+            }
+            client.release();
+        });
+    });
+})
+
+router.post("/getByUserId", async (req, res) => {
+    let query = {
+        text: ``,
+        values: []
+    }
+    try {
+        const { userUUID } = req.body
+        query.text = ` SELECT e.equipmentUUID, e.equipmentModel, ue.userEquipUUID
+            FROM users u
+            JOIN users_equipment ue ON u.userId = ue.userId
+            JOIN equipment e ON ue.equipmentId = e.equipmentId
+            WHERE u.userUUID = ANY($1::uuid[]);`
+        query.values = [userUUID]
+    } catch (err) {
+        return res.status(401).json({ error: err })
+    }
+    db.connect((err, client) => {  // Get client via callback
+        if (err) {
+            console.log(err)
+            return res.status(501).json({ error: err.message })
+        }
+        client.query(query.text, query.values, (err, queryRes) => {
+            if (err) {
+                console.error(err);
+                client.release();
+                return res.status(401).json({ error: err.message })
+            }
+            if (queryRes.rows.length) {
+                res.status(200).json(queryRes.rows);
+            } else {
+                res.status(401).json({ error: "No Deparment found" });
+            }
+            client.release();
+        });
+    });
+})
+
+router.get("/getAll", verifyToken, async (req, res) => {
+    let query = {
+        text:``,
+        values:[]
+    }
+    if (req.user.priv == 'admin'){
+        query.text = `SELECT c.companyName, d.departmentName, e.equipmentUUID,
+        e.equipmentModel, e.createon
+        FROM equipment e
+        JOIN company c ON e.companyId = c.companyId
+        JOIN department d ON e.departmentId = d.departmentId
+        JOIN users_company uc ON e.companyId = uc.companyId
+        WHERE uc.userId = $1`;
+        query.values = [req.user.userId]
+    }else if (req.user.priv == "super"){
+        query.text =  `SELECT c.companyName, d.departmentName, e.* 
+        FROM equipment e
+        JOIN company c ON e.companyId = c.companyId
+        JOIN department d ON e.departmentId = d.departmentId`;
+    }else{
+        query.text =  `SELECT c.companyName, d.departmentName, e.equipmentUUID,
+        e.equipmentModel, e.createon
+        FROM equipment e
+        JOIN company c ON e.companyId = c.companyId
+        JOIN department d ON e.departmentId = d.departmentId
+        JOIN users_equipment ue ON e.equipmentId = ue.equipmentId
+        WHERE ue.userId = $1`;
+        query.values = [req.user.userId]
+    }
+    console.log(query.text)
+    db.connect((err, client) => {  // Get client via callback
+        if (err) {
+            console.log(err)
+            return res.status(501).json({ error: err.message })
+        }
+        client.query(query.text, query.values, (err, queryRes) => {
+            if (err) {
+                console.error(err);
+                client.release();
+                return res.status(401).json({ error: err.message })
             }
             if (queryRes.rows.length) {
                 res.status(200).json(queryRes.rows);
@@ -203,6 +273,126 @@ router.get("/getAll", async (req, res) => {
         });
     });
 });
+
+
+router.delete("/delete", async (req, res) => {
+    let query = {
+        text: [],
+        values: []
+    }
+    try {
+        const { equipmentUUID } = req.body;
+        query.text = [
+            `DELETE FROM users_equipment WHERE equipmentId IN (SELECT equipmentId FROM equipment WHERE equipmentUUID = ANY($1::uuid[]));`,
+            `DELETE FROM equipment WHERE equipmentUUID = ANY($1::uuid[]);`
+        ];
+        query.values = [equipmentUUID];
+    } catch (err) {
+        return res.status(401).json({ error: err })
+    }
+    db.connect((err, client) => {  // Get client via callback
+        if (err) {
+            console.log(err);
+            return res.status(501).json({ error: err.message })
+        }
+        const executeQueries = async () => {
+            try {
+                for (const sql of query.text) {
+                    await client.query(sql, query.values);
+                }
+                client.release();
+                res.status(200).json({ status: "rows deleted successfully" });
+            } catch (queryErr) {
+                console.error(queryErr);
+                client.release();
+                res.status(401).json({ error: queryErr.message });
+            }
+        };
+        executeQueries();
+    });
+})
+
+router.delete("/deleteUserEquip", async (req, res) => {
+    let query = {
+        text: ``,
+        values: []
+    }
+    try {
+        const { userEquipUUID } = req.body;
+        query.text = `DELETE FROM users_equipment where userEquipUUID = ANY($1::uuid[])`;
+        query.values = [userEquipUUID];
+    } catch (err) {
+        return res.status(401).json({ error: err })
+    }
+    db.connect((err, client) => {  // Get client via callback
+        if (err) {
+            console.log(err)
+            return res.status(501).json({ error: err.message })
+        }
+        client.query(query.text, query.values, (err, queryRes) => {
+            if (err) {
+                console.error(err);
+                client.release();
+                return res.status(401).json({ error: err.message })
+            }
+            client.release();
+            res.status(200).json({ status: "rows deleted successfully" });
+        });
+    });
+})
+
+
+router.put("/edit", async (req, res) => {
+    let query = {
+        text: ``,
+        values: []
+    }
+    try {
+        const { equipment } = req.body;
+        query.text = `
+           WITH company_info AS (
+            SELECT companyId
+            FROM company
+            WHERE companyUUID = $2::uuid
+        ),
+        dep_info AS (
+            SELECT departmentId
+            FROM department
+            WHERE departmentUUID = $3::uuid
+        )
+        UPDATE equipment
+        SET
+            equipmentModel = $4,
+            departmentId = (SELECT departmentId FROM dep_info),
+            companyId = (SELECT companyId FROM company_info)
+        WHERE
+            equipmentUUID = $1::uuid;`,
+
+            query.values.push(equipment.equipmentUUID)
+        query.values.push(equipment.companyUUID)
+        query.values.push(equipment.departmentUUID)
+        query.values.push(equipment.equipmentModel)
+    } catch (err) {
+        console.log(err);
+        return res.status(401).json({ error: err })
+    }
+
+    db.connect((err, client) => {
+        if (err) {
+            console.log(err)
+            return res.status(501).json({ error: err.message })
+        }
+        client.query(query.text, query.values, (err, queryRes) => {
+            if (err) {
+                console.error(err);
+                client.release();
+                return res.status(401).json({ error: err.message })
+            }
+            res.status(200).json({ message: `${queryRes.rowCount} user equipment acc created` });
+            client.release();
+        });
+    });
+})
 
 
 module.exports = router;

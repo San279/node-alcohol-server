@@ -3,15 +3,15 @@ const cors = require("cors")
 const app = express();
 const port = process.env.SERVER_PORT
 
+const jwt = require('jsonwebtoken');
+
 const users = require("./routes/users");
 const company = require("./routes/company");
 const department = require("./routes/department");
 const equipment = require("./routes/equipment");
-/*
-const mock_equipment = require("./routes/mock_equipment");
-const user = require("./routes/mock_user");
-const department = require("./routes/department")
-*/
+const equipment_log = require("./routes/equipment_log");
+const equipment_port = require("./routes/equipment_port");
+
 const init_schema = require("./init_table")
 
 init_schema.initializeSchema()
@@ -23,18 +23,13 @@ app.use(cors({
 }));
 
 app.use(express.json());
-
+app.use("/actionapi", equipment_port);
+app.use("/mock/api/log", equipment_log);
 app.use("/mock/api/user", users);
 app.use("/mock/api/company", company);
 app.use("/mock/api/dep", department);
 app.use("/mock/api/equip", equipment)
-/*
-app.use("/mock/api/equip", mock_equipment)
-app.use("/mock/api/user", user)
-app.use("/mock/api/dep", department)
-*/
 
-//app/use("/mock/api/changeEquip/:equipNo")
 
 app.listen(port, () => {
   console.log("Backend running on " + port);

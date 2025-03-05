@@ -1,5 +1,5 @@
 const equipmentLogSchema = {
-    "logId" : NUMBER,
+    "logId" : 0,
     "logUUID" : "",
     "gID": "2025",
     "alcoholStrength": "0",
@@ -12,7 +12,7 @@ const equipmentLogSchema = {
     "iPAdress": "",
     "faceFeature" : "",
     "name": "one",
-    "createdOn" : ""
+    "createOn" : ""
 }
 
 module.exports = equipmentLogSchema
