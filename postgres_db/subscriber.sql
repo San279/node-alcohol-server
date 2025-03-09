@@ -11,6 +11,9 @@ CREATE TABLE IF NOT EXISTS department(
     departmentUUID UUID DEFAULT gen_random_uuid() UNIQUE,
     departmentName VARCHAR(255),
     companyId INTEGER REFERENCES company(companyId),
+    lowAlcLvl INTEGER,
+    medAlcLvl INTEGER,
+    highAlcLvl INTEGER,
     createOn TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     UNIQUE (departmentName, companyId)
 );
@@ -23,6 +26,8 @@ CREATE TABLE IF NOT EXISTS users(
     priv VARCHAR(255),
     name VARCHAR(255),
     gId VARCHAR(255),
+    taxId VARCHAR(255),
+    email VARCHAR(255),
     createOn TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 

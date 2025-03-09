@@ -17,11 +17,13 @@ router.get("/getAllLogs", verifyToken, async (req, res) => {
             JOIN department d ON el.deptName = d.departmentName
             JOIN company c ON d.companyId = c.companyId
             JOIN users_company uc ON c.companyId = uc.companyId
-            WHERE uc.userId = $1`
+            WHERE uc.userId = $1 ORDER BY el.createOn ASC`
         query.values = [req.user.userId]
     } else if (req.user.priv == "super") {
-        query.text = `SELECT el.*
-            FROM equipment_log el;`;
+        query.text = `SELECT el.*, d.*
+            FROM equipment_log el
+            JOIN department d ON el.deptName = d.departmentName 
+            ORDER BY el.createOn ASC`;
     } else {
         query.text = `SELECT el.*
         FROM equipment_log el
@@ -50,6 +52,34 @@ router.get("/getAllLogs", verifyToken, async (req, res) => {
     })
 })
 
+
+router.get("/getRecentLog", async(req,res)=>{
+    const query = `SELECT logUUID 
+    FROM equipment_log
+    ORDER BY createOn DESC LIMIT 1`
+    db.connect((err, client) => {  // Get client via callback
+        if (err) {
+            console.log(err)
+            res.status(501).json({ error: err.message })
+            return
+        }
+        client.query(query, (err, queryRes) => {
+            if (err) {
+                console.error(err);
+                res.status(401).json({ error: err.message })
+                client.release();
+                return
+            }
+            if (queryRes.rows.length) {
+                res.status(200).json(queryRes.rows);
+            } else {
+                res.status(401).json({ error: "No equipment log found" });
+            }
+            client.release();
+        });
+    });
+
+})
 router.post("/getLogByUser/:id", utils.requireParams(['id']), async (req, res) => {
     const id = req.params.id;
     const query = `

@@ -7,25 +7,28 @@ const utils = require('./uti')
 
 //need security
 router.post("/create", async (req, res) => {
-    if (req.body.constructor === Object && Object.keys(req.body).length === 0) {
-        console.log('Object missing');
-        res.status(500).json("No json data found");
+    let query = {
+        text: ``,
+        values: []
     }
-    //const id = req.params.id;
-    const { companyUUID, departmentName } = req.body;
-    const query = {
-        text: `
-            WITH company_info AS (
+    try {
+        const { companyUUID, departmentName, lowAlcLvl, medAlcLvl, highAlcLvl} = req.body;
+        query.text = ` WITH company_info AS (
                 SELECT companyId AS company_id
                 FROM company
-                WHERE companyUUID = ANY($2::uuid[])
+                WHERE companyUUID = $2::uuid
             )
-            INSERT INTO department (departmentName, companyId)
-            SELECT department_name, company_id
-            FROM UNNEST($1::text[]) AS department_name, company_info;
-        `,
-        values: [departmentName, companyUUID]
-    };
+            INSERT INTO department (departmentName, companyId, lowAlcLvl, medAlcLvl, highAlcLvl)
+            SELECT $1, company_id, $3, $4, $5
+            FROM company_info;`
+            query.values = [departmentName,companyUUID, lowAlcLvl, medAlcLvl, highAlcLvl];
+
+    } catch (err) {
+        console.log(err);
+        return res.status(401).json({ error: err })
+    }
+    //const id = req.params.id;
+    //values: [departmentName, companyUUID]
 
     console.log(query.text, query.values)
     db.connect((err, client) => {
@@ -239,6 +242,7 @@ router.get("/getAll", verifyToken, async (req, res) => {
         text:``,
         values:[]
     }
+    console.log(req.user);
     if (req.user.priv == 'admin'){
         query.text = `SELECT c.companyName, c.companyUUID, d.departmentName,
         d.createOn, d.departmentUUID 
@@ -275,7 +279,7 @@ router.get("/getAll", verifyToken, async (req, res) => {
             if (queryRes.rows.length) {
                 res.status(200).json(queryRes.rows);
             } else {
-                res.status(401).json({ error: "No company found" });
+                res.status(201).json({ error: "No department found" });
             }
             client.release();
         });
